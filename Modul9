@@ -1,0 +1,303 @@
+
+-- 1. MEMBUAT DATABASE
+-- ============================================================
+DROP DATABASE IF EXISTS toko_buku;
+CREATE DATABASE toko_buku;
+USE toko_buku;
+
+-- 2. MEMBUAT TABEL
+-- ============================================================
+
+-- Tabel Buku
+CREATE TABLE buku (
+    id_buku INT AUTO_INCREMENT PRIMARY KEY,
+    judul VARCHAR(100),
+    penulis VARCHAR(100),
+    harga DECIMAL(10,2),
+    stok INT
+);
+
+-- Tabel Pelanggan
+CREATE TABLE pelanggan (
+    id_pelanggan INT AUTO_INCREMENT PRIMARY KEY,
+    nama VARCHAR(100),
+    total_belanja DECIMAL(10,2) DEFAULT 0,
+    status_member ENUM('REGULER', 'GOLD', 'PLATINUM') DEFAULT 'REGULER'
+);
+
+-- Tabel Transaksi
+CREATE TABLE transaksi (
+    id_transaksi INT AUTO_INCREMENT PRIMARY KEY,
+    id_pelanggan INT,
+    id_buku INT,
+    jumlah INT,
+    total_harga DECIMAL(10,2),
+    tanggal_transaksi DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_pelanggan) REFERENCES pelanggan(id_pelanggan),
+    FOREIGN KEY (id_buku) REFERENCES buku(id_buku)
+);
+
+-- 3. MENGISI DATA SAMPEL
+-- ============================================================
+
+-- Data Buku
+INSERT INTO buku (judul, penulis, harga, stok) VALUES
+('Pemrograman Python', 'Andi Wijaya', 150000, 10),
+('Basis Data Terapan', 'Siti Rahayu', 200000, 8),
+('Jaringan Komputer', 'Budi Santoso', 180000, 5),
+('Algoritma dan Struktur Data', 'Dewi Lestari', 250000, 3),
+('Kecerdasan Buatan', 'Dr. Ahmad', 300000, 2),
+('Pemrograman Web', 'Joko Susilo', 175000, 6),
+('Sistem Operasi', 'Rina Sari', 220000, 4),
+('Rekayasa Perangkat Lunak', 'Tono', 280000, 3);
+
+-- Data Pelanggan
+INSERT INTO pelanggan (nama, total_belanja, status_member) VALUES
+('Rina', 0, 'REGULER'),
+('Andi', 500000, 'REGULER'),
+('Budi', 1500000, 'GOLD'),
+('Citra', 6000000, 'PLATINUM'),
+('Dewi', 0, 'REGULER'),
+('Eko', 800000, 'REGULER'),
+('Fitri', 2500000, 'GOLD');
+
+-- 4. MEMBUAT FUNCTION
+-- ============================================================
+
+-- Fungsi untuk menghitung diskon berdasarkan total belanja
+DELIMITER $$
+
+DROP FUNCTION IF EXISTS hitung_diskon $$
+
+CREATE FUNCTION hitung_diskon(total_belanja DECIMAL(10,2))
+RETURNS DECIMAL(5,2)
+DETERMINISTIC
+BEGIN
+    DECLARE diskon DECIMAL(5,2);
+    
+    IF total_belanja < 1000000 THEN
+        SET diskon = 0;
+    ELSEIF total_belanja >= 1000000 AND total_belanja < 5000000 THEN
+        SET diskon = 5;
+    ELSE
+        SET diskon = 10;
+    END IF;
+    
+    RETURN diskon;
+END$$
+
+DELIMITER ;
+
+-- 5. MEMBUAT STORED PROCEDURE
+-- ============================================================
+
+-- Prosedur untuk menambah transaksi
+DELIMITER $$
+
+DROP PROCEDURE IF EXISTS tambah_transaksi $$
+
+CREATE PROCEDURE tambah_transaksi(
+    IN p_id_pelanggan INT,
+    IN p_id_buku INT,
+    IN p_jumlah INT
+)
+BEGIN
+    DECLARE v_harga DECIMAL(10,2);
+    DECLARE v_stok INT;
+    DECLARE v_total_harga DECIMAL(10,2);
+    DECLARE v_nama_buku VARCHAR(100);
+    DECLARE v_nama_pelanggan VARCHAR(100);
+    
+    -- Mulai transaksi
+    START TRANSACTION;
+    
+    -- Ambil data buku
+    SELECT harga, stok, judul INTO v_harga, v_stok, v_nama_buku
+    FROM buku 
+    WHERE id_buku = p_id_buku;
+    
+    -- Ambil nama pelanggan
+    SELECT nama INTO v_nama_pelanggan
+    FROM pelanggan
+    WHERE id_pelanggan = p_id_pelanggan;
+    
+    -- Validasi stok
+    IF v_stok < p_jumlah THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = CONCAT('Stok tidak mencukupi! Stok tersedia: ', v_stok, ', Diminta: ', p_jumlah);
+        ROLLBACK;
+    ELSE
+        -- Hitung total harga
+        SET v_total_harga = v_harga * p_jumlah;
+        
+        -- Kurangi stok buku
+        UPDATE buku 
+        SET stok = stok - p_jumlah 
+        WHERE id_buku = p_id_buku;
+        
+        -- Tambahkan transaksi
+        INSERT INTO transaksi (id_pelanggan, id_buku, jumlah, total_harga, tanggal_transaksi)
+        VALUES (p_id_pelanggan, p_id_buku, p_jumlah, v_total_harga, NOW());
+        
+        -- Update total belanja pelanggan
+        UPDATE pelanggan 
+        SET total_belanja = total_belanja + v_total_harga 
+        WHERE id_pelanggan = p_id_pelanggan;
+        
+        -- Commit transaksi
+        COMMIT;
+        
+        -- Tampilkan pesan berhasil
+        SELECT 'Transaksi berhasil!' AS status,
+               v_nama_pelanggan AS pelanggan,
+               v_nama_buku AS buku,
+               p_jumlah AS jumlah,
+               v_total_harga AS total_harga;
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- 6. MEMBUAT TRIGGER
+-- ============================================================
+
+-- Trigger untuk update status member otomatis
+DELIMITER $$
+
+DROP TRIGGER IF EXISTS update_status_member $$
+
+CREATE TRIGGER update_status_member
+AFTER UPDATE ON pelanggan
+FOR EACH ROW
+BEGIN
+    DECLARE v_status ENUM('REGULER', 'GOLD', 'PLATINUM');
+    
+    -- Tentukan status berdasarkan total_belanja baru
+    IF NEW.total_belanja >= 5000000 THEN
+        SET v_status = 'PLATINUM';
+    ELSEIF NEW.total_belanja >= 1000000 THEN
+        SET v_status = 'GOLD';
+    ELSE
+        SET v_status = 'REGULER';
+    END IF;
+    
+    -- Update status jika berbeda dengan yang sekarang
+    IF NEW.status_member != v_status THEN
+        UPDATE pelanggan 
+        SET status_member = v_status 
+        WHERE id_pelanggan = NEW.id_pelanggan;
+    END IF;
+END$$
+
+DELIMITER ;
+
+-- 7. QUERY PENGUJIAN
+-- ============================================================
+
+-- Melihat semua data awal
+SELECT '=== DATA BUKU ===' AS ' ';
+SELECT * FROM buku;
+
+SELECT '=== DATA PELANGGAN ===' AS ' ';
+SELECT * FROM pelanggan;
+
+SELECT '=== DATA TRANSAKSI ===' AS ' ';
+SELECT * FROM transaksi;
+
+-- 7.1. UJI FUNCTION
+-- ============================================================
+SELECT '=== UJI FUNCTION HITUNG_DISKON ===' AS ' ';
+SELECT 
+    total_belanja,
+    hitung_diskon(total_belanja) AS diskon_persen,
+    CONCAT(hitung_diskon(total_belanja), '%') AS diskon
+FROM pelanggan;
+
+SELECT '=== UJI FUNCTION DENGAN NILAI SPESIFIK ===' AS ' ';
+SELECT 500000 AS total_belanja, hitung_diskon(500000) AS diskon
+UNION ALL
+SELECT 1500000, hitung_diskon(1500000)
+UNION ALL
+SELECT 6000000, hitung_diskon(6000000);
+
+-- 7.2. UJI STORED PROCEDURE (Transaksi Berhasil)
+-- ============================================================
+SELECT '=== UJI PROCEDURE TAMBAH_TRANSAKSI (Berhasil) ===' AS ' ';
+
+-- Rina (id_pelanggan=1) membeli 2 buku Python (id_buku=1)
+CALL tambah_transaksi(1, 1, 2);
+
+-- Lihat data setelah transaksi
+SELECT '=== DATA BUKU SETELAH TRANSAKSI ===' AS ' ';
+SELECT * FROM buku WHERE id_buku = 1;
+
+SELECT '=== DATA PELANGGAN SETELAH TRANSAKSI ===' AS ' ';
+SELECT * FROM pelanggan WHERE id_pelanggan = 1;
+
+SELECT '=== DATA TRANSAKSI BARU ===' AS ' ';
+SELECT * FROM transaksi ORDER BY id_transaksi DESC LIMIT 1;
+
+-- 7.3. UJI STORED PROCEDURE (Stok Tidak Cukup)
+-- ============================================================
+SELECT '=== UJI PROCEDURE TAMBAH_TRANSAKSI (Stok Tidak Cukup) ===' AS ' ';
+
+-- Mencoba membeli 10 buku Algoritma (stok = 3)
+CALL tambah_transaksi(2, 4, 10);
+
+-- 7.4. UJI TRIGGER (Update Status Member)
+-- ============================================================
+SELECT '=== UJI TRIGGER UPDATE_STATUS_MEMBER ===' AS ' ';
+
+-- Rina (id_pelanggan=1) total_belanja menjadi 1.500.000 (seharusnya GOLD)
+UPDATE pelanggan SET total_belanja = 1500000 WHERE id_pelanggan = 1;
+SELECT '=== STATUS RINA SETELAH UPDATE ===' AS ' ';
+SELECT * FROM pelanggan WHERE id_pelanggan = 1;
+
+-- Rina total_belanja menjadi 6.000.000 (seharusnya PLATINUM)
+UPDATE pelanggan SET total_belanja = 6000000 WHERE id_pelanggan = 1;
+SELECT '=== STATUS RINA SETELAH UPDATE KEDUA ===' AS ' ';
+SELECT * FROM pelanggan WHERE id_pelanggan = 1;
+
+-- Budi total_belanja menjadi 800.000 (seharusnya REGULER)
+UPDATE pelanggan SET total_belanja = 800000 WHERE id_pelanggan = 3;
+SELECT '=== STATUS BUDI SETELAH UPDATE ===' AS ' ';
+SELECT * FROM pelanggan WHERE id_pelanggan = 3;
+
+-- 7.5. SKENARIO END-TO-END
+-- ============================================================
+SELECT '=== SKENARIO END-TO-END: PELANGGAN BARU ===' AS ' ';
+
+-- Dewi (id_pelanggan=5) membeli 3 buku Algoritma (id_buku=4)
+CALL tambah_transaksi(5, 4, 3);
+
+-- Lihat data Dewi
+SELECT '=== DATA DEWI SETELAH TRANSAKSI PERTAMA ===' AS ' ';
+SELECT * FROM pelanggan WHERE id_pelanggan = 5;
+
+-- Dewi membeli 2 buku Kecerdasan Buatan (id_buku=5)
+CALL tambah_transaksi(5, 5, 2);
+
+-- Lihat data Dewi setelah transaksi kedua
+SELECT '=== DATA DEWI SETELAH TRANSAKSI KEDUA ===' AS ' ';
+SELECT * FROM pelanggan WHERE id_pelanggan = 5;
+
+-- Lihat semua transaksi Dewi
+SELECT '=== TRANSAKSI DEWI ===' AS ' ';
+SELECT * FROM transaksi WHERE id_pelanggan = 5;
+
+-- 8. INFORMASI OBJEK DATABASE
+-- ============================================================
+SELECT '=== INFORMASI STORED PROCEDURE ===' AS ' ';
+SHOW PROCEDURE STATUS WHERE Db = 'toko_buku';
+
+SELECT '=== INFORMASI FUNCTION ===' AS ' ';
+SHOW FUNCTION STATUS WHERE Db = 'toko_buku';
+
+SELECT '=== INFORMASI TRIGGER ===' AS ' ';
+SHOW TRIGGERS FROM toko_buku;
+
+-- 9. MENGHAPUS OBJEK (opsional)
+-- ============================================================
+-- DROP FUNCTION hitung_diskon;
+-- DROP PROCEDURE tambah_transaksi;
+-- DROP TRIGGER update_status_member;
