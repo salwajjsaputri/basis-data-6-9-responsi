@@ -1,0 +1,160 @@
+
+-- 1. MEMBUAT DATABASE
+-- ============================================================
+DROP DATABASE IF EXISTS db_penjualan;
+CREATE DATABASE db_penjualan;
+USE db_penjualan;
+
+-- 2. MEMBUAT TABEL
+-- ============================================================
+
+-- Tabel Produk
+CREATE TABLE produk (
+    kode_produk VARCHAR(10) PRIMARY KEY,
+    nama_produk VARCHAR(50),
+    harga INT
+);
+
+-- Tabel Pelanggan
+CREATE TABLE pelanggan (
+    id_pelanggan INT AUTO_INCREMENT PRIMARY KEY,
+    nama_pelanggan VARCHAR(50),
+    alamat VARCHAR(100)
+);
+
+-- Tabel Transaksi
+CREATE TABLE transaksi (
+    id_transaksi INT AUTO_INCREMENT PRIMARY KEY,
+    kode_produk VARCHAR(10),
+    jumlah INT,
+    total_harga INT,
+    id_pelanggan INT,
+    FOREIGN KEY (kode_produk) REFERENCES produk(kode_produk),
+    FOREIGN KEY (id_pelanggan) REFERENCES pelanggan(id_pelanggan)
+);
+
+-- 3. MENGISI DATA SAMPEL
+-- ============================================================
+
+-- Data Produk
+INSERT INTO produk (kode_produk, nama_produk, harga) VALUES
+('P001', 'Laptop', 7000000),
+('P002', 'Mouse', 150000),
+('P003', 'Keyboard', 250000),
+('P004', 'Monitor', 2000000),
+('P005', 'Printer', 1500000),
+('P006', 'Speaker', 500000),
+('P007', 'Webcam', 350000),
+('P008', 'Hardisk Eksternal', 1200000),
+('P009', 'Flashdisk', 100000),
+('P010', 'Kabel HDMI', 75000);
+
+-- Data Pelanggan
+INSERT INTO pelanggan (nama_pelanggan, alamat) VALUES
+('Andi', 'Jl. Merdeka No.1'),
+('Budi', 'Jl. Sudirman No.2'),
+('Citra', 'Jl. Diponegoro No.3'),
+('Dewi', 'Jl. Pahlawan No.4'),
+('Eko', 'Jl. Veteran No.5'),
+('Fitri', 'Jl. Mawar No.6'),
+('Gunawan', 'Jl. Melati No.7'),
+('Hani', 'Jl. Kenanga No.8');
+
+-- Data Transaksi
+INSERT INTO transaksi (kode_produk, jumlah, total_harga, id_pelanggan) VALUES
+('P001', 2, 14000000, 1),
+('P002', 5, 750000, 1),
+('P003', 3, 750000, 2),
+('P004', 1, 2000000, 2),
+('P005', 2, 3000000, 3),
+('P006', 4, 2000000, 3),
+('P007', 2, 700000, 4),
+('P008', 1, 1200000, 4),
+('P009', 10, 1000000, 5),
+('P010', 20, 1500000, 5),
+('P001', 1, 7000000, 6),
+('P003', 2, 500000, 6),
+('P005', 1, 1500000, 7),
+('P008', 2, 2400000, 7),
+('P002', 10, 1500000, 8);
+
+-- 4. QUERY UNTUK SOAL TUGAS
+-- ============================================================
+
+-- Soal 1: Query untuk mendapatkan produk dengan harga di atas rata-rata
+-- ============================================================
+SELECT '=== SOAL 1: Produk dengan harga di atas rata-rata ===' AS ' ';
+SELECT kode_produk, nama_produk, harga
+FROM produk
+WHERE harga > (
+    SELECT AVG(harga)
+    FROM produk
+);
+
+-- Soal 2: Optimalkan query untuk mencari transaksi di atas nilai tertentu menggunakan indeks
+-- ============================================================
+SELECT '=== SOAL 2: Sebelum optimasi (tanpa indeks) ===' AS ' ';
+EXPLAIN SELECT * FROM transaksi WHERE total_harga > 1000000;
+
+-- Membuat indeks pada kolom total_harga
+CREATE INDEX idx_total_harga ON transaksi(total_harga);
+
+SELECT '=== SOAL 2: Setelah optimasi (dengan indeks) ===' AS ' ';
+EXPLAIN SELECT * FROM transaksi WHERE total_harga > 1000000;
+
+-- Melihat data transaksi dengan total_harga > 1.000.000
+SELECT * FROM transaksi WHERE total_harga > 1000000;
+
+-- Soal 3: Query yang menampilkan nama pelanggan beserta jumlah total transaksi mereka menggunakan JOIN
+-- ============================================================
+SELECT '=== SOAL 3: Nama pelanggan dan total transaksi ===' AS ' ';
+SELECT 
+    p.nama_pelanggan,
+    COUNT(t.id_transaksi) AS jumlah_transaksi,
+    SUM(t.total_harga) AS total_belanja
+FROM pelanggan p
+LEFT JOIN transaksi t ON p.id_pelanggan = t.id_pelanggan
+GROUP BY p.id_pelanggan, p.nama_pelanggan
+ORDER BY total_belanja DESC;
+
+-- Soal 4: Evaluasi query di poin 3 menggunakan EXPLAIN
+-- ============================================================
+SELECT '=== SOAL 4: EXPLAIN query JOIN ===' AS ' ';
+EXPLAIN SELECT 
+    p.nama_pelanggan,
+    COUNT(t.id_transaksi) AS jumlah_transaksi,
+    SUM(t.total_harga) AS total_belanja
+FROM pelanggan p
+LEFT JOIN transaksi t ON p.id_pelanggan = t.id_pelanggan
+GROUP BY p.id_pelanggan, p.nama_pelanggan
+ORDER BY total_belanja DESC;
+
+-- Soal 5: Buat indeks unik pada kolom kode_produk di tabel produk
+-- ============================================================
+SELECT '=== SOAL 5: Membuat UNIQUE INDEX pada nama_produk ===' AS ' ';
+CREATE UNIQUE INDEX idx_unique_nama_produk ON produk(nama_produk);
+
+-- Mencoba insert data dengan nama_produk duplikat (akan error)
+-- INSERT INTO produk VALUES ('P011', 'Laptop', 8000000);
+
+-- Soal 6: Menganalisis query SELECT menggunakan EXPLAIN setelah membuat indeks pada poin 5
+-- ============================================================
+SELECT '=== SOAL 6: EXPLAIN dengan UNIQUE INDEX ===' AS ' ';
+EXPLAIN SELECT * FROM produk WHERE nama_produk = 'Monitor';
+
+-- 5. MENAMPILKAN SEMUA DATA UNTUK VERIFIKASI
+-- ============================================================
+SELECT '=== DATA PRODUK ===' AS ' ';
+SELECT * FROM produk;
+
+SELECT '=== DATA PELANGGAN ===' AS ' ';
+SELECT * FROM pelanggan;
+
+SELECT '=== DATA TRANSAKSI ===' AS ' ';
+SELECT * FROM transaksi;
+
+-- 6. INFORMASI INDEX
+-- ============================================================
+SELECT '=== INFORMASI INDEX ===' AS ' ';
+SHOW INDEX FROM produk;
+SHOW INDEX FROM transaksi;
