@@ -1,0 +1,167 @@
+
+
+-- 1. MEMBUAT DATABASE
+-- ============================================================
+DROP DATABASE IF EXISTS db_kampus;
+CREATE DATABASE db_kampus;
+USE db_kampus;
+
+-- 2. MEMBUAT TABEL
+-- ============================================================
+
+-- Tabel Mahasiswa
+CREATE TABLE mahasiswa (
+    nim CHAR(10) PRIMARY KEY,
+    nama VARCHAR(50),
+    jurusan VARCHAR(30)
+);
+
+-- Tabel Matakuliah
+CREATE TABLE matakuliah (
+    kode_mk CHAR(6) PRIMARY KEY,
+    nama_mk VARCHAR(50),
+    sks INT
+);
+
+-- Tabel Dosen
+CREATE TABLE dosen (
+    nip CHAR(10) PRIMARY KEY,
+    nama VARCHAR(50),
+    bidang VARCHAR(30)
+);
+
+-- Tabel Tagihan (untuk RBAC)
+CREATE TABLE tagihan (
+    id_tagihan INT AUTO_INCREMENT PRIMARY KEY,
+    nim CHAR(10),
+    jumlah INT,
+    keterangan VARCHAR(100),
+    FOREIGN KEY (nim) REFERENCES mahasiswa(nim)
+);
+
+-- 3. MENGISI DATA SAMPEL
+-- ============================================================
+
+-- Data Mahasiswa
+INSERT INTO mahasiswa (nim, nama, jurusan) VALUES
+('1234567890', 'Andi', 'Informatika'),
+('1234567891', 'Budi', 'Sistem Informasi'),
+('1234567892', 'Citra', 'Informatika'),
+('1234567893', 'Dewi', 'Sistem Informasi'),
+('1234567894', 'Eko', 'Informatika');
+
+-- Data Matakuliah
+INSERT INTO matakuliah (kode_mk, nama_mk, sks) VALUES
+('IF101', 'Algoritma', 3),
+('IF102', 'Basis Data', 3),
+('IF103', 'Pemrograman Web', 3),
+('SI101', 'Analisis Sistem', 2),
+('SI102', 'Manajemen Proyek', 2);
+
+-- Data Dosen
+INSERT INTO dosen (nip, nama, bidang) VALUES
+('9876543210', 'Dr. Ahmad', 'Informatika'),
+('9876543211', 'Dr. Rina', 'Sistem Informasi'),
+('9876543212', 'Dr. Budi', 'Informatika');
+
+-- Data Tagihan
+INSERT INTO tagihan (nim, jumlah, keterangan) VALUES
+('1234567890', 500000, 'SPP Semester 1'),
+('1234567890', 250000, 'Praktikum'),
+('1234567891', 500000, 'SPP Semester 1'),
+('1234567891', 150000, 'Buku'),
+('1234567892', 500000, 'SPP Semester 1');
+
+-- 4. MANAJEMEN USER DAN HAK AKSES
+-- ============================================================
+
+-- Membuat user (jalankan sebagai root)
+-- ============================================================
+-- CREATE USER 'user_admin'@'localhost' IDENTIFIED BY 'admin123';
+-- CREATE USER 'user_mhs'@'localhost' IDENTIFIED BY 'mhs123';
+-- CREATE USER 'user_dosen'@'localhost' IDENTIFIED BY 'dosen123';
+
+-- Memberikan hak akses (jalankan sebagai root)
+-- ============================================================
+
+-- Hak akses untuk user_admin (semua akses ke db_kampus)
+-- GRANT ALL PRIVILEGES ON db_kampus.* TO 'user_admin'@'localhost';
+
+-- Hak akses untuk user_mhs (SELECT, INSERT, UPDATE pada matakuliah)
+-- GRANT SELECT, INSERT, UPDATE ON db_kampus.matakuliah TO 'user_mhs'@'localhost';
+
+-- Hak akses untuk user_dosen (SELECT, INSERT, UPDATE, DELETE pada mahasiswa)
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON db_kampus.mahasiswa TO 'user_dosen'@'localhost';
+
+-- Melihat hak akses user (jalankan sebagai root)
+-- ============================================================
+-- SHOW GRANTS FOR 'user_admin'@'localhost';
+-- SHOW GRANTS FOR 'user_mhs'@'localhost';
+-- SHOW GRANTS FOR 'user_dosen'@'localhost';
+
+-- Mencabut hak akses (contoh)
+-- ============================================================
+-- REVOKE INSERT, UPDATE ON db_kampus.matakuliah FROM 'user_mhs'@'localhost';
+
+-- 5. IMPLEMENTASI RBAC (Role-Based Access Control)
+-- ============================================================
+
+-- Membuat role
+CREATE ROLE 'role_keuangan'@'localhost';
+
+-- Memberikan hak akses ke role
+GRANT SELECT, UPDATE ON db_kampus.tagihan TO 'role_keuangan'@'localhost';
+
+-- Melihat hak akses role
+SHOW GRANTS FOR 'role_keuangan'@'localhost';
+
+-- Membuat user baru untuk role
+-- CREATE USER 'user_keu'@'localhost' IDENTIFIED BY 'keu123';
+
+-- Memberikan role ke user
+-- GRANT 'role_keuangan'@'localhost' TO 'user_keu'@'localhost';
+
+-- Mengaktifkan default role
+-- SET DEFAULT ROLE 'role_keuangan'@'localhost' TO 'user_keu'@'localhost';
+
+-- Menampilkan hak akses user_keu
+-- SHOW GRANTS FOR 'user_keu'@'localhost';
+
+-- 6. QUERY PENGUJIAN
+-- ============================================================
+
+-- Menampilkan semua data untuk verifikasi
+SELECT '=== DATA MAHASISWA ===' AS ' ';
+SELECT * FROM mahasiswa;
+
+SELECT '=== DATA MATAKULIAH ===' AS ' ';
+SELECT * FROM matakuliah;
+
+SELECT '=== DATA DOSEN ===' AS ' ';
+SELECT * FROM dosen;
+
+SELECT '=== DATA TAGIHAN ===' AS ' ';
+SELECT * FROM tagihan;
+
+-- 7. CONTOH PENGUJIAN USER
+-- ============================================================
+-- Login sebagai user_mhs
+-- ============================================================
+-- mysql -u user_mhs -p
+-- Password: mhs123
+
+-- Uji akses positif (harus berhasil)
+-- SELECT * FROM db_kampus.matakuliah;
+-- INSERT INTO db_kampus.matakuliah VALUES ('IF104', 'Keamanan Data', 3);
+
+-- Uji akses negatif (harus gagal)
+-- DELETE FROM db_kampus.matakuliah WHERE kode_mk = 'IF104';
+-- SELECT * FROM db_kampus.mahasiswa;
+
+-- 8. MENGHAPUS USER DAN ROLE (opsional)
+-- ============================================================
+-- DROP USER 'user_admin'@'localhost';
+-- DROP USER 'user_mhs'@'localhost';
+-- DROP USER 'user_dosen'@'localhost';
+-- DROP USER 'user_keu'@'localhost';
+-- DROP ROLE 'role_keuangan'@'localhost';
